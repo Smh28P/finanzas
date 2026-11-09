@@ -263,7 +263,7 @@ function calcular() {
     if (m.tipo === 'gasto' && o in bal) { if (activo[o]) bal[o] -= a; else { bal[o] += a; cargos[o] += a; } }
     else if (m.tipo === 'ingreso' && d in bal) bal[d] += a;
     else if (m.tipo === 'transferencia') { if (o in bal) bal[o] -= a; if (d in bal) bal[d] += a; }
-    else if (m.tipo === 'pago') { if (o in bal) bal[o] -= a; if (d in bal) { bal[d] -= a; pagado[d] += a; } }
+    else if (m.tipo === 'pago') { if (o in bal) { if (activo[o]) bal[o] -= a; else { bal[o] += a; cargos[o] += a; } } if (d in bal) { bal[d] -= a; pagado[d] += a; } }
     else if (m.tipo === 'ajuste' && d in bal) { bal[d] += a; if (!activo[d] && a > 0) cargos[d] += a; }
   }
   return { bal, cargos, pagado };
@@ -648,7 +648,7 @@ function dibujarCaptura() {
       <div class="field-l">Entra a</div>${chips(activos, cap.destino, 'des')}`;
   } else if (cap.tipo === 'pago') {
     campos = `<div class="field-l">Pagar a</div>${chips(acreedores, cap.destino, 'des')}
-      <div class="field-l">Desde</div>${chips(activos, cap.origen, 'ori')}`;
+      <div class="field-l">Desde</div>${chips(conGasto.filter(([id]) => id !== cap.destino), cap.origen, 'ori')}`;
   } else {
     campos = `<div class="field-l">Desde</div>${chips(activos, cap.origen, 'ori')}
       <div class="field-l">Hacia</div>${chips(activos, cap.destino, 'des')}`;
@@ -740,14 +740,22 @@ function hojaMovimiento(id) {
   const m = db.movimientos.find(x => x.id === id); if (!m) return;
   abrirHoja(`<div class="sheet-title">${esc(titulo(m))}</div>
     <div class="amount num" style="margin:8px 0 4px;text-align:left;font-size:40px">${importe(m)}</div>
-    <div class="help">${esc(fechaCorta(parse(m.fecha)))}${detalle(m) ? ' · ' + esc(detalle(m)) : ''}</div>
+    <div class="help">${detalle(m) ? esc(detalle(m)) : ''}</div>
+    <div class="meta" style="justify-content:flex-start;margin:14px 0 0"><label>${ico('cal', 15)}${esc(fechaCorta(parse(m.fecha)))} · Cambiar fecha<input type="date" value="${esc(m.fecha)}" data-mfecha></label></div>
     <div style="display:flex;gap:10px;margin-top:22px"><button class="btn block" data-cerrar>Cerrar</button><button class="btn block danger" data-borrar>Eliminar</button></div>`, sh => {
     let armado = false;
     sh.querySelector('[data-cerrar]').onclick = cerrarHoja;
+    sh.querySelector('[data-mfecha]').onchange = e => {
+      const f = e.target.value;
+      if (!f || f === m.fecha) return;
+      const nuevo = { ...m, id: uid(), fecha: f };
+      aplicar({ op: 'add', mov: nuevo }); aplicar({ op: 'del', id: m.id });
+      cerrarHoja(); toast(`Fecha cambiada al ${fechaCorta(parse(f))}`);
+    };
     sh.querySelector('[data-borrar]').onclick = e => {
       if (!armado) { armado = true; e.currentTarget.textContent = 'Toca otra vez para eliminar'; return; }
       aplicar({ op: 'del', id }); cerrarHoja();
-      toast('Movimiento eliminado', { txt: 'Deshacer', fn: () => aplicar({ op: 'add', mov: m }) });
+      toast('Movimiento eliminado', { txt: 'Deshacer', fn: () => aplicar({ op: 'add', mov: { ...m, id: uid() } }) });
     };
   });
 }

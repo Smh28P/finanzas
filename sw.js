@@ -1,6 +1,6 @@
 // Guarda la app para que abra al instante y sin señal.
 // Sube VERSION cada vez que cambies index.html para que el iPhone tome la nueva versión.
-const VERSION = 'finanzas-v1';
+const VERSION = 'finanzas-v2';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
