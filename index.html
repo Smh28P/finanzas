@@ -289,6 +289,7 @@ function compromisos() {
     if (c.vence) { const v = parse(c.vence); if (v <= corte) lista.push({ nombre: c.nombre, monto: saldo, fecha: v, cuenta: c.id }); continue; }
     const dia = num(c.dia_pago); if (!dia) continue;
     const v = proxVencimiento(dia, t); if (v > corte) continue;
+    if (db.movimientos.some(m => m.tipo === 'marca' && m.destino === c.id && entre(vencAnterior(dia, v), v, m.fecha))) continue;
     const cuota = num(c.cuota);
     if (cuota) {
       const ya = db.movimientos.some(m => m.tipo === 'pago' && m.destino === c.id && entre(vencAnterior(dia, v), v, m.fecha));
@@ -386,7 +387,7 @@ function vistaHoy() {
         : `<div class="label">Te faltan para el ${corteTxt}</div><div class="big num neg">${money(-libre)}</div><div class="label">comprometido ${money(comp)}</div>`}
       </div></div>
     ${lista.length ? lista.map(x => { const u = urgencia(x.fecha); return `
-      <button class="row list-btn tap" data-pagar="${esc(x.cuenta || '')}" data-fijo="${esc(x.fijo || '')}" data-monto="${x.monto}">
+      <button class="row list-btn tap" data-comp="${esc(x.cuenta || '')}" data-fijo="${esc(x.fijo || '')}" data-monto="${x.monto}">
         <span class="sw" style="background:${u.color}"></span><div class="grow"><div class="t">${esc(x.nombre)}</div></div>
         <span class="pill ${u.cls}">${u.txt}</span><div class="amt num">${money(x.monto)}</div></button>`; }).join('')
       : `<div class="empty" style="padding:8px">Sin pagos antes del ${corteTxt}</div>`}
@@ -759,6 +760,23 @@ function hojaMovimiento(id) {
     };
   });
 }
+function hojaCompromiso(id, monto) {
+  const c = cuenta(id); if (!c) return;
+  const { bal } = calcular();
+  const dia = num(c.dia_pago), esTarjeta = c.tipo === 'tarjeta';
+  abrirHoja(`<div class="sheet-title">${esc(c.nombre)}</div>
+    <div class="help">Por pagar en esta quincena: <b class="num">${money(monto)}</b>${esTarjeta ? ` · saldo total hoy <span class="num">${money(bal[id])}</span>` : ''}</div>
+    <button class="btn primary block" data-reg style="margin-top:20px">Registrar pago</button>
+    ${dia ? `<button class="btn block" data-cub style="margin-top:10px;font-size:15px">${esTarjeta ? 'Ya cubrí el pago de este corte' : 'Ya cubrí este pago'}</button>
+    <div class="help" style="margin-top:10px;text-align:center">Deja de aparecer en Hoy hasta el siguiente día de pago. ${esTarjeta ? 'Lo que gastes después del corte sigue sumando a tu saldo en Cuentas.' : ''}</div>` : ''}`, sh => {
+    sh.querySelector('[data-reg]').onclick = () => { cerrarHoja(); setTimeout(() => abrirCaptura({ tipo: 'pago', destino: id, origen: 'TD', monto }), 180); };
+    const cub = sh.querySelector('[data-cub]');
+    if (cub) cub.onclick = () => {
+      aplicar({ op: 'add', mov: { id: uid(), fecha: iso(today()), tipo: 'marca', monto: 0, categoria: '', origen: '', destino: id, nota: 'Corte cubierto', extra: false, fijo: '', creado: new Date().toISOString() } });
+      cerrarHoja(); toast(`${c.nombre}: pago del corte cubierto`);
+    };
+  });
+}
 function hojaFijo(id) {
   const f = db.fijos.find(x => x.id === id); if (!f) return;
   const v = proxVencimiento(num(f.dia), today());
@@ -899,6 +917,7 @@ $('#app').addEventListener('click', e => {
   if (d.mes) { const n = new Date(mesRes.y, mesRes.m + Number(d.mes), 1); mesRes = { y: n.getFullYear(), m: n.getMonth() }; return render(); }
   if (d.ajustar) return hojaAjuste(d.ajustar);
   if (d.fijoPagar || d.fijo) return hojaFijo(d.fijoPagar || d.fijo);
+  if (d.comp) return hojaCompromiso(d.comp, num(d.monto));
   if (d.pagar) return abrirCaptura({ tipo: 'pago', destino: d.pagar, origen: 'TD', monto: num(d.monto) });
 });
 $('#app').addEventListener('change', e => {
